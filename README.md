@@ -1,7 +1,7 @@
 # Техническое задание хакатона
 ## Агент проверки требований
 
-> **BCC-HUB x MNU FinTech Hackathon**  
+> **BCC-HUB x MNU FinTech Hackathon** https://bcchubagents.mnu.kz/  
 > Проверяемый документ: [`docs/requirements.md`](./docs/requirements.md)
 
 ---

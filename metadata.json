@@ -1,0 +1,8 @@
+{
+  "name": "Агент проверки требований",
+  "description": "ИИ-агент статической проверки документов с требованиями по критериям ISO/IEC/IEEE 29148:2018 и IEEE Std 830-1998 с формированием структурированного отчёта.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

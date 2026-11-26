@@ -15,7 +15,11 @@ import {
 import { formatMarkdownReport } from '../src/server/reportFormatter.ts';
 import { generatePdfReportBuffer } from '../src/server/pdfFormatter.ts';
 import { parseCliArgs } from '../scripts/analyze.ts';
-import { validateRequirementsDocument } from '../src/server/validator.ts';
+import {
+  validateRequirementsDocument,
+  resolveModelName,
+  supportsThinkingLevel,
+} from '../src/server/validator.ts';
 import type { ValidationReport } from '../src/types/validation.ts';
 
 async function createSamplePdfBuffer(pages: string[]): Promise<Buffer> {
@@ -350,5 +354,17 @@ describe('CLI and error handling', () => {
         process.env.GEMINI_API_KEY = previousKey;
       }
     }
+  });
+
+  it('resolves valid Gemini models and gates thinkingLevel properly', () => {
+    assert.equal(resolveModelName('gemini-2.5-flash'), 'gemini-2.5-flash');
+    assert.equal(resolveModelName('models/gemini-2.5-pro'), 'gemini-2.5-pro');
+    assert.equal(resolveModelName('gemini-4-hydrogen'), 'gemini-4-hydrogen');
+    assert.throws(() => resolveModelName('gemini-1.5-flash'), /устарела/);
+
+    assert.equal(supportsThinkingLevel('gemini-4-hydrogen'), true);
+    assert.equal(supportsThinkingLevel('gemini-3.1-flash-lite'), true);
+    assert.equal(supportsThinkingLevel('gemini-2.5-flash'), false);
+    assert.equal(supportsThinkingLevel('gemini-2.5-pro'), false);
   });
 });

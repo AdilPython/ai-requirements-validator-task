@@ -26,20 +26,31 @@ import type {
   DocumentAspectAnalysis,
 } from '../types/validation.ts';
 
-const ALLOWED_MODELS = new Set([
-  'gemini-4-hydrogen',
-  'gemini-3.1-flash-lite',
-  'gemini-4-neon',
-  'gemini-4-carbon',
-  'gemini-4-argon',
+const DEPRECATED_MODELS = new Set([
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-pro',
+  'gemini-2.0-flash-thinking',
 ]);
 
 export function resolveModelName(overrideModel?: string): string {
   const candidate = overrideModel?.trim() || process.env.GEMINI_MODEL?.trim();
-  if (candidate && ALLOWED_MODELS.has(candidate)) {
-    return candidate;
+  if (candidate) {
+    const normalized = candidate.replace(/^models\//, '');
+    if (DEPRECATED_MODELS.has(normalized)) {
+      throw new Error(
+        `Модель "${normalized}" устарела и не поддерживается. Используйте актуальную модель, например gemini-4-hydrogen, gemini-2.5-flash или gemini-2.5-pro.`
+      );
+    }
+    return normalized;
   }
   return 'gemini-4-hydrogen';
+}
+
+export function supportsThinkingLevel(model: string): boolean {
+  return /^gemini-(3|4)/.test(model);
 }
 
 export function resolveAgentVersion(): string {
@@ -138,7 +149,9 @@ async function callGeminiStructured<T>(
           systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: genaiSchema,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
+          ...(supportsThinkingLevel(model)
+            ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM } }
+            : {}),
         },
       });
 

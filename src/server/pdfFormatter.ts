@@ -278,11 +278,12 @@ export async function generatePdfReportBuffer(
       .text('Приоритезированные рекомендации:', { width: contentWidth });
     report.verdict.prioritizedRecommendations.forEach((rec, i) => {
       ensureSpace(24);
+      const cleaned = rec.replace(/^\s*\d+[.)]\s+/, '').trim();
       doc
         .font('Sans')
         .fontSize(9.5)
         .fillColor('#1E293B')
-        .text(`${i + 1}. ${rec}`, { width: contentWidth, lineGap: 1.5 });
+        .text(`${i + 1}. ${cleaned}`, { width: contentWidth, lineGap: 1.5 });
     });
 
     // 3. Critical Defects
@@ -294,14 +295,14 @@ export async function generatePdfReportBuffer(
         .fillColor('#334155')
         .text('Критичных дефектов не выявлено.', { width: contentWidth });
     } else {
-      for (const cf of report.summary.criticalFindings) {
+      report.summary.criticalFindings.forEach((cf, idx) => {
         ensureSpace(70);
         doc
           .font('Sans-Bold')
           .fontSize(9.5)
           .fillColor('#B91C1C')
           .text(
-            `${cf.findingId} · ${cf.category} · Требования: ${cf.requirementIds.join(', ') || 'ОБЩЕЕ'}`,
+            `${idx + 1}. ${cf.findingId} · ${cf.category} · Требования: ${cf.requirementIds.join(', ') || 'ОБЩЕЕ'}`,
             { width: contentWidth }
           );
         doc
@@ -325,7 +326,7 @@ export async function generatePdfReportBuffer(
           .fillColor('#0F172A')
           .text(`Рекомендация: ${cf.recommendation}`, { width: contentWidth });
         doc.moveDown(0.45);
-      }
+      });
     }
 
     // 4. Requirement Extraction Table

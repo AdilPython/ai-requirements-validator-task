@@ -242,7 +242,7 @@ export async function processDocument(input: {
 
 export function chunkDocument(
   doc: ProcessedDocument,
-  maxCharsPerChunk = 14000
+  maxCharsPerChunk = 25000
 ): DocumentChunk[] {
   const safeLimit = Math.max(2000, maxCharsPerChunk);
   const rawChunks: {

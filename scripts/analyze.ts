@@ -68,7 +68,7 @@ function printUsage(): void {
   -i, --input <path>       Путь к входному документу (.md, .txt, .pdf)
   -o, --output <path>      Путь к файлу отчёта (.pdf, .md, .json)
   -m, --model <name>       Модель Gemini (по умолчанию из GEMINI_MODEL или gemini-3.5-flash-lite)
-      --chunk-size <n>     Размер чанка в символах (по умолчанию 14000)
+      --chunk-size <n>     Размер чанка в символах (по умолчанию 25000)
   -h, --help               Показать справку`
   );
 }

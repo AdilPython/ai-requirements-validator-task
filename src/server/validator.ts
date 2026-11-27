@@ -84,7 +84,9 @@ const CHUNK_SYSTEM_INSTRUCTION = `Ты — ведущий инженер-ана�
 
 ПРАВИЛА ЭТАПА 1:
 1. Язык ответа — строго русский.
-2. Отличай реальные требования (functional, non_functional, integration, data, ui, acceptance, constraint) от заголовков, общих сведений/метаданных и вводных описаний. Разделы с метаданными, пустыми шаблонами или описаниями без требований обязательно перечисли в nonRequirementSectionsObserved (чтобы зафиксировать охват всех разделов), а сами проверяемые положения/пункты/табличные правила/контракты API извлеки в requirements.
+2. Отличай реальные требования (functional, non_functional, integration, data, ui, acceptance, constraint) от заголовков, общих сведений/метаданных и вводных описаний.
+   - Обязательно извлеки требования из ВСЕХ содержательных разделов: цели, UI-дизайн, BPMN/Sequence ограничения, функциональные требования (Ф-1..Ф-N), нефункциональные (SLA/время отправки), требования к данным (поля, валюта, единицы измерения), требования к интеграции (повторная доставка / идемпотентность), требования к тестированию, критерии приёмки, а также правила/логику/параметры/статусы REST API.
+   - Разделы с метаданными, пустыми шаблонами или описаниями без требований перечисли в nonRequirementSectionsObserved (чтобы зафиксировать охват всех разделов).
 3. Сохраняй оригинальную формулировку (originalWording) и точную ссылку на источник (sourceLocation) по маркерам строк L.. или страниц [Страница N] из переданного текста.
 4. Для каждого извлечённого требования оцени 7 критериев:
    - unambiguity (Однозначность)
@@ -95,15 +97,20 @@ const CHUNK_SYSTEM_INSTRUCTION = `Ты — ведущий инженер-ана�
    - consistency (Согласованность)
    - terminology (Корректность терминологии)
    Используй значения: pass, partial, fail, not_applicable.
-5. Для каждой выявленной проблемы создай объект в findings:
+5. Обязательно проверяй API- и финтех-дефекты (при наличии в тексте):
+   - Использование HTTP GET для операций изменения состояния и передача чувствительных идентификаторов (например, cardId) в URL query-параметрах вместо POST/PUT JSON request body, а также противоречие «Content-Type: application/json» при пометке «Тело не используется» и отсутствие описания обязательных заголовков.
+   - Возврат HTTP 200 OK с телом ошибки (например, {"result":"ERROR"}) для ошибок бизнес-валидации вместо корректных HTTP 400/422, а также несогласованные заголовки и описания статусов (например, «200. Successful — Created», описание 404 внутри раздела 403).
+   - Отсутствие Production Base URL («Prod: —»), Swagger/OpenAPI («Swagger: —»), отсутствие метода чтения настроек при заявленном «чтение порога», расхождение типов данных (integer vs string), обязательность amount при enabled=0.
+   - Финтех-особенности: расхождение единиц хранения и округления (тенге vs тиыны), отсутствие ключа идемпотентности/дедупликации событий процессинга при заявленной устойчивости к повторной доставке, граничные условия возвратов и сдвига даты операции/проведения на рубеже месяца и часового пояса, незаполненные разделы тестирования/ревью/согласования.
+6. Для каждой выявленной проблемы создай объект в findings (без дублирования одной и той же проблемы):
    - severity: Critical | High | Medium | Low
-   - certainty: confirmed_defect — только если проблема прямо доказывается точной цитатой из текста (например, явное противоречие, пустая заглушка «заполняются тестировщиками», GET-метод для сохранения состояния, несогласованные коды 200/400/403/404); question_or_risk — если проблема не доказана текстом на 100%, а является пробелом, вопросом к аналитику или потенциальным риском.
+   - certainty: confirmed_defect — только если проблема прямо доказывается точной цитатой из текста; question_or_risk — если проблема не доказана текстом на 100%, а является пробелом, вопросом к аналитику или потенциальным риском.
    - ЗАПРЕЩЕНО выдумывать цитаты. evidence обязано точно соответствовать тексту документа.`;
 
 const WHOLE_DOC_SYSTEM_INSTRUCTION = `Ты — ведущий инженер-аналитик и архитектор качества требований.
 На этапе 2 тебе переданы:
 1) Полный реестр всех извлечённых требований документа (REQ-001..REQ-NNN).
-2) Находки, уже выявленные по отдельным фрагментам.
+2) Находки, уже выявленные на этапе 1.
 3) Текст исходного документа (или полная сводка разделов, если документ очень большой).
 
 Твоя задача — выполнить сквозной анализ документа целиком и вынести итоговый вердикт.
@@ -112,13 +119,13 @@ const WHOLE_DOC_SYSTEM_INSTRUCTION = `Ты — ведущий инженер-а�
 1. Язык ответа — строго русский.
 2. В documentAnalyses ОБЯЗАТЕЛЬНО оцени все 7 аспектов (по одному объекту на каждый aspect):
    - contradictions (Противоречия между требованиями)
-   - missing_requirements (Пропущенные требования, например обработка ошибок, ролевая модель, идемпотентность, чтение настроек и т.д.)
+   - missing_requirements (Пропущенные требования, например обработка ошибок, ролевая модель, идемпотентность, чтение настроек, округление/тиыны)
    - duplicates (Дубликаты и избыточные повторения)
    - inconsistent_terminology (Несогласованная терминология, единицы измерения, названия сущностей)
-   - missing_business_scenarios (Отсутствующие бизнес-сценарии и граничные кейсы)
+   - missing_business_scenarios (Отсутствующие бизнес-сценарии и граничные кейсы, возвраты на границе месяца, отключение уведомлений, неактивные карты)
    - parent_child_conflicts (Конфликты между родительской и дочерней спецификациями, например Часть A vs Часть B)
-   - missing_integration_details (Отсутствующие детали интеграции, контрактов, авторизации, форматов и тайм-аутов)
-3. В crossDocumentFindings добавь сквозные и межраздельные находки (не дублируя уже перечисленные дословно, а фиксируя конфликты между частями документа, пропуски и системные риски). Для каждой находки:
+   - missing_integration_details (Отсутствующие детали интеграции, Prod URL, контракты заголовков/ошибок, идемпотентность событий, тайм-ауты)
+3. В crossDocumentFindings добавляй ТОЛЬКО НОВЫЕ межраздельные находки и системные пропуски, НЕ повторяя находки, которые уже зафиксированы в блоке «НАХОДКИ ИЗ ЧАНКОВ».
    - Укажи точные ID требований в requirementRefs (например ["REQ-004", "REQ-015"] или ["ОБЩЕЕ"]).
    - Укажи severity: Critical | High | Medium | Low.
    - Строго соблюдай правило доказанности: confirmed_defect при наличии прямой цитаты/факта из текста, question_or_risk если это вопрос или потенциальный риск. Никогда не выдумывай цитаты.
@@ -127,7 +134,7 @@ const WHOLE_DOC_SYSTEM_INSTRUCTION = `Ты — ведущий инженер-а�
    - canStartDevelopment: true/false
    - canStartTesting: true/false
    - rationale: развёрнутое обоснование со ссылками на конкретные находки и разделы.
-   - prioritizedRecommendations: конкретный нумерованный план первоочередных исправлений.`;
+   - prioritizedRecommendations: массив конкретных рекомендаций БЕЗ префиксов нумерации в начале строки (не пиши «1. » в самом тексте элемента).`;
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -235,6 +242,164 @@ function padId(prefix: string, num: number): string {
   return `${prefix}-${String(num).padStart(3, '0')}`;
 }
 
+export function stripLeadingNumbering(text: string): string {
+  return text.replace(/^\s*\d+[.)]\s+/, '').trim();
+}
+
+const SEVERITY_RANK: Record<ValidationFinding['severity'], number> = {
+  Critical: 4,
+  High: 3,
+  Medium: 2,
+  Low: 1,
+};
+
+function normalizeEvidenceText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[*_`#«»"'“”]/g, '')
+    .replace(/\|/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenizeWords(text: string): Set<string> {
+  const matches = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3);
+  return new Set(matches);
+}
+
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const item of a) {
+    if (b.has(item)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function hasExplicitUnitNumber(location: string): boolean {
+  return /(?:строк|страниц|\bL\d+|\d+)/i.test(location);
+}
+
+export type RawFindingCandidate = Omit<ValidationFinding, 'findingId'>;
+
+export function deduplicateFindings(
+  candidates: RawFindingCandidate[]
+): ValidationFinding[] {
+  const merged: RawFindingCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const normCandEv = normalizeEvidenceText(candidate.evidence);
+    const candTokens = tokenizeWords(candidate.explanation);
+    const normCandLoc = candidate.sourceLocation.toLowerCase().trim();
+
+    let matchIndex = -1;
+
+    for (let i = 0; i < merged.length; i++) {
+      const existing = merged[i];
+      const normExEv = normalizeEvidenceText(existing.evidence);
+      const exTokens = tokenizeWords(existing.explanation);
+      const normExLoc = existing.sourceLocation.toLowerCase().trim();
+
+      const expSim = jaccardSimilarity(candTokens, exTokens);
+      const exactEvidenceMatch =
+        normCandEv.length > 0 && normCandEv === normExEv;
+      const substringEvidenceMatch =
+        normCandEv.length >= 12 &&
+        normExEv.length >= 12 &&
+        (normCandEv.includes(normExEv) || normExEv.includes(normCandEv));
+      const sameCategory =
+        existing.category.toLowerCase().trim() ===
+        candidate.category.toLowerCase().trim();
+      const sameLocation =
+        normCandLoc.length > 0 && normCandLoc === normExLoc;
+
+      const isDuplicate =
+        (exactEvidenceMatch && (sameCategory || expSim >= 0.25)) ||
+        (substringEvidenceMatch && expSim >= 0.3) ||
+        (sameLocation && expSim >= 0.55);
+
+      if (isDuplicate) {
+        matchIndex = i;
+        break;
+      }
+    }
+
+    if (matchIndex === -1) {
+      merged.push({
+        ...candidate,
+        requirementIds:
+          candidate.requirementIds.length > 0
+            ? Array.from(new Set(candidate.requirementIds))
+            : ['ОБЩЕЕ'],
+      });
+      continue;
+    }
+
+    const existing = merged[matchIndex];
+    const specificReqIds = Array.from(
+      new Set([...existing.requirementIds, ...candidate.requirementIds])
+    ).filter((id) => id !== 'ОБЩЕЕ');
+
+    const bestSeverity =
+      SEVERITY_RANK[candidate.severity] > SEVERITY_RANK[existing.severity]
+        ? candidate.severity
+        : existing.severity;
+
+    const bestCertainty =
+      existing.certainty === 'confirmed_defect' ||
+      candidate.certainty === 'confirmed_defect'
+        ? 'confirmed_defect'
+        : 'question_or_risk';
+
+    const bestLocation =
+      hasExplicitUnitNumber(existing.sourceLocation) &&
+      !hasExplicitUnitNumber(candidate.sourceLocation)
+        ? existing.sourceLocation
+        : !hasExplicitUnitNumber(existing.sourceLocation) &&
+            hasExplicitUnitNumber(candidate.sourceLocation)
+          ? candidate.sourceLocation
+          : existing.sourceLocation.length >= candidate.sourceLocation.length
+            ? existing.sourceLocation
+            : candidate.sourceLocation;
+
+    const bestEvidence =
+      existing.evidence.length >= candidate.evidence.length
+        ? existing.evidence
+        : candidate.evidence;
+
+    const bestExplanation =
+      existing.explanation.length >= candidate.explanation.length
+        ? existing.explanation
+        : candidate.explanation;
+
+    const bestRecommendation =
+      existing.recommendation.length >= candidate.recommendation.length
+        ? existing.recommendation
+        : candidate.recommendation;
+
+    merged[matchIndex] = {
+      ...existing,
+      requirementIds: specificReqIds.length > 0 ? specificReqIds : ['ОБЩЕЕ'],
+      severity: bestSeverity,
+      certainty: bestCertainty,
+      sourceLocation: bestLocation,
+      evidence: bestEvidence,
+      explanation: bestExplanation,
+      recommendation: bestRecommendation,
+    };
+  }
+
+  return merged.map((item, idx) => ({
+    ...item,
+    findingId: padId('FND', idx + 1),
+  }));
+}
+
 export async function validateRequirementsDocument(
   input: ValidateInput
 ): Promise<ValidationReport> {
@@ -265,7 +430,7 @@ export async function validateRequirementsDocument(
     pdfBuffer: input.pdfBuffer,
   });
 
-  const chunks = chunkDocument(processed, input.maxCharsPerChunk ?? 14000);
+  const chunks = chunkDocument(processed, input.maxCharsPerChunk ?? 25000);
   const coveredSections = Array.from(
     new Set(processed.segments.map((s) => s.sectionTitle))
   );
@@ -273,12 +438,10 @@ export async function validateRequirementsDocument(
   // Pass 1: Extract & analyze each chunk
   const requirements: ExtractedRequirement[] = [];
   const individualAnalyses: RequirementAnalysis[] = [];
-  const findings: ValidationFinding[] = [];
+  const rawFindings: RawFindingCandidate[] = [];
   const localRefToGlobalId = new Map<string, string>();
-  const reqFindingsMap = new Map<string, string[]>();
 
   let reqCounter = 1;
-  let findingCounter = 1;
   let resolvedDocTitle = processed.documentTitle;
 
   for (const chunk of chunks) {
@@ -325,8 +488,6 @@ ${chunk.annotatedText}
         originalWording: rawReq.originalWording,
       });
 
-      reqFindingsMap.set(globalId, []);
-
       individualAnalyses.push({
         requirementId: globalId,
         docId: rawReq.docId,
@@ -338,7 +499,6 @@ ${chunk.annotatedText}
     }
 
     for (const rawFinding of chunkResult.findings) {
-      const fId = padId('FND', findingCounter++);
       const mappedReqIds = Array.from(
         new Set(
           rawFinding.requirementRefs.map((ref) => {
@@ -352,15 +512,7 @@ ${chunk.annotatedText}
         )
       );
 
-      for (const reqId of mappedReqIds) {
-        const list = reqFindingsMap.get(reqId);
-        if (list && !list.includes(fId)) {
-          list.push(fId);
-        }
-      }
-
-      findings.push({
-        findingId: fId,
+      rawFindings.push({
         requirementIds: mappedReqIds.length > 0 ? mappedReqIds : ['ОБЩЕЕ'],
         category: rawFinding.category,
         severity: rawFinding.severity,
@@ -381,7 +533,8 @@ ${chunk.annotatedText}
     )
     .join('\n');
 
-  const findingsDigest = findings
+  const intermediateFindings = deduplicateFindings(rawFindings);
+  const findingsDigest = intermediateFindings
     .map(
       (f) =>
         `${f.findingId} [${f.severity} | ${f.certainty} | ${f.requirementIds.join(', ')}]: ${f.explanation} (Цитата: «${f.evidence}»)`
@@ -401,12 +554,12 @@ ${chunk.annotatedText}
 --- РЕЕСТР ИЗВЛЕЧЁННЫХ ТРЕБОВАНИЙ ---
 ${requirementsDigest}
 
---- НАХОДКИ ИЗ ЧАНКОВ ---
+--- НАХОДКИ ИЗ ЧАНКОВ (НЕ ДУБЛИРУЙ ИХ В crossDocumentFindings) ---
 ${findingsDigest || 'Пока не зафиксировано.'}
 
 ${contextBody}
 
-Выполни целостный анализ всего документа по всем 7 аспектам (противоречия, пропущенные требования, дубликаты, несогласованная терминология, отсутствующие бизнес-сценарии, конфликты родитель/дочерняя, детали интеграции), добавь сквозные находки и сформируй итоговое заключение о готовности к разработке и тестированию.`;
+Выполни целостный анализ всего документа по всем 7 аспектам (противоречия, пропущенные требования, дубликаты, несогласованная терминология, отсутствующие бизнес-сценарии, конфликты родитель/дочерняя, детали интеграции), добавь ТОЛЬКО недостающие сквозные находки и сформируй итоговое заключение о готовности к разработке и тестированию.`;
 
   const wholeDocResult: WholeDocumentResponse = await callGeminiStructured(
     ai,
@@ -417,10 +570,7 @@ ${contextBody}
     WholeDocumentResponseSchema
   );
 
-  const crossFindingIdsByAspect = new Map<string, string[]>();
-
   for (const rawCross of wholeDocResult.crossDocumentFindings) {
-    const fId = padId('FND', findingCounter++);
     const mappedReqIds = Array.from(
       new Set(
         rawCross.requirementRefs.map(
@@ -429,15 +579,7 @@ ${contextBody}
       )
     );
 
-    for (const reqId of mappedReqIds) {
-      const list = reqFindingsMap.get(reqId);
-      if (list && !list.includes(fId)) {
-        list.push(fId);
-      }
-    }
-
-    const finding: ValidationFinding = {
-      findingId: fId,
+    rawFindings.push({
       requirementIds: mappedReqIds.length > 0 ? mappedReqIds : ['ОБЩЕЕ'],
       category: rawCross.category,
       severity: rawCross.severity,
@@ -446,23 +588,16 @@ ${contextBody}
       sourceLocation: rawCross.sourceLocation,
       explanation: rawCross.explanation,
       recommendation: rawCross.recommendation,
-    };
-    findings.push(finding);
-
-    for (const aspectItem of wholeDocResult.documentAnalyses) {
-      const overlapsReq = aspectItem.relatedRequirementIds.some((id) =>
-        finding.requirementIds.includes(id)
-      );
-      if (overlapsReq) {
-        const arr = crossFindingIdsByAspect.get(aspectItem.aspect) ?? [];
-        arr.push(fId);
-        crossFindingIdsByAspect.set(aspectItem.aspect, arr);
-      }
-    }
+    });
   }
 
+  // Deduplicate all findings across chunks and Pass 2 before assigning final FND-XXX IDs
+  const findings = deduplicateFindings(rawFindings);
+
   for (const analysis of individualAnalyses) {
-    analysis.findingIds = reqFindingsMap.get(analysis.requirementId) ?? [];
+    analysis.findingIds = findings
+      .filter((f) => f.requirementIds.includes(analysis.requirementId))
+      .map((f) => f.findingId);
   }
 
   const documentAnalyses: DocumentAspectAnalysis[] =
@@ -474,19 +609,13 @@ ${contextBody}
           )
         )
         .map((f) => f.findingId);
-      const mergedFindingIds = Array.from(
-        new Set([
-          ...relatedFindings,
-          ...(crossFindingIdsByAspect.get(item.aspect) ?? []),
-        ])
-      );
       return {
         aspect: item.aspect,
         aspectTitle: item.aspectTitle,
         status: item.status,
         summary: item.summary,
         relatedRequirementIds: item.relatedRequirementIds,
-        findingIds: mergedFindingIds,
+        findingIds: Array.from(new Set(relatedFindings)),
       };
     });
 
@@ -537,6 +666,13 @@ ${contextBody}
     second: '2-digit',
   });
 
+  const normalizedVerdict = {
+    ...wholeDocResult.verdict,
+    prioritizedRecommendations: wholeDocResult.verdict.prioritizedRecommendations
+      .map(stripLeadingNumbering)
+      .filter((s) => s.length > 0),
+  };
+
   const baseReport: Omit<ValidationReport, 'markdownReport'> = {
     id: crypto.randomUUID(),
     passport: {
@@ -569,7 +705,7 @@ ${contextBody}
       severityCounts,
       criticalFindings,
     },
-    verdict: wholeDocResult.verdict,
+    verdict: normalizedVerdict,
   };
 
   const markdownReport = formatMarkdownReport(baseReport);

@@ -23,6 +23,7 @@ import {
   validateRequirementsDocument,
   resolveModelName,
   supportsThinkingLevel,
+  deduplicateFindings,
 } from '../src/server/validator.ts';
 import type { ValidationReport } from '../src/types/validation.ts';
 
@@ -82,6 +83,13 @@ describe('documentProcessor', () => {
       content,
       'markdown'
     );
+    const singlePassChunks = chunkDocument(processed);
+    assert.equal(
+      singlePassChunks.length,
+      1,
+      'docs/requirements.md should fit in 1 holistic chunk by default'
+    );
+
     const chunks = chunkDocument(processed, 2500);
 
     assert.ok(chunks.length >= 4, `Expected >= 4 chunks, got ${chunks.length}`);
@@ -302,6 +310,17 @@ describe('report formatting (Markdown & PDF)', () => {
             explanation: 'Операция изменения состояния оформлена через HTTP GET.',
             recommendation: 'Изменить метод на PUT или POST.',
           },
+          {
+            findingId: 'FND-002',
+            requirementIds: ['REQ-002'],
+            category: 'Противоречие',
+            severity: 'Critical',
+            certainty: 'confirmed_defect',
+            evidence: '{"result":"ERROR","message":"Проверьте сумму"}',
+            sourceLocation: 'Часть B, строка 171',
+            explanation: 'Возврат HTTP 200 OK с телом ошибки вместо 400/422.',
+            recommendation: 'Возвращать 400 или 422 при ошибке валидации.',
+          },
         ],
       },
       verdict: {
@@ -311,7 +330,8 @@ describe('report formatting (Markdown & PDF)', () => {
         canStartTesting: false,
         rationale: 'Требуется устранить критичный дефект контракта API.',
         prioritizedRecommendations: [
-          'Заменить GET на POST/PUT в /alerts/saveLimit.',
+          '1. Заменить GET на POST/PUT в /alerts/saveLimit.',
+          '2) Устранить возврат HTTP 200 при бизнес-ошибке.',
         ],
       },
     };
@@ -320,7 +340,12 @@ describe('report formatting (Markdown & PDF)', () => {
     assert.ok(md.includes('## 1. Паспорт прогона'));
     assert.ok(md.includes('## 5. Находки с доказательствами'));
     assert.ok(md.includes('## 7. Критичные дефекты (Critical)'));
-    assert.ok(md.includes('FND-001'));
+    assert.ok(md.includes('1. **FND-001**'));
+    assert.ok(md.includes('2. **FND-002**'));
+    assert.ok(md.includes('1. Заменить GET на POST/PUT'));
+    assert.ok(md.includes('2. Устранить возврат HTTP 200'));
+    assert.ok(!md.includes('1. 1.'));
+    assert.ok(!md.includes('2. 2)'));
 
     const fonts = resolveFontPaths();
     assert.ok(fonts.regular.includes('dejavu-fonts-ttf'));
@@ -399,5 +424,62 @@ describe('CLI and error handling', () => {
     assert.equal(supportsThinkingLevel('gemini-4-hydrogen'), true);
     assert.equal(supportsThinkingLevel('gemini-2.5-flash'), false);
     assert.equal(supportsThinkingLevel('gemini-2.5-pro'), false);
+  });
+
+  it('deduplicates overlapping findings across chunks and passes', () => {
+    const deduped = deduplicateFindings([
+      {
+        requirementIds: ['ОБЩЕЕ'],
+        category: 'Детали интеграции',
+        severity: 'Critical',
+        certainty: 'confirmed_defect',
+        evidence: '**REST type** | GET',
+        sourceLocation: 'Строки 104, 108',
+        explanation:
+          'Используется HTTP метод GET для сохранения и изменения данных на сервере (/alerts/saveLimit).',
+        recommendation: 'Изменить тип запроса REST API на POST или PUT.',
+      },
+      {
+        requirementIds: ['REQ-001'],
+        category: 'Противоречие',
+        severity: 'High',
+        certainty: 'confirmed_defect',
+        evidence: 'REST type | GET',
+        sourceLocation: 'Часть B. REST API, Общие параметры',
+        explanation:
+          'Использование HTTP метода GET для сохранения и изменения данных на сервере нарушает REST.',
+        recommendation: 'Изменить HTTP метод на POST или PUT.',
+      },
+      {
+        requirementIds: ['ОБЩЕЕ'],
+        category: 'Неполнота',
+        severity: 'Medium',
+        certainty: 'confirmed_defect',
+        evidence: 'заполняются тестировщиками',
+        sourceLocation: 'Строка 57',
+        explanation:
+          'Раздел тестирования требований содержит заглушку вместо реальных требований к тестам.',
+        recommendation: 'Заполнить раздел конкретными тест-кейсами.',
+      },
+      {
+        requirementIds: ['ОБЩЕЕ'],
+        category: 'Неполнота',
+        severity: 'Medium',
+        certainty: 'confirmed_defect',
+        evidence: 'Тестирование требований | заполняются тестировщиками',
+        sourceLocation: 'Часть A. Требования к тестированию',
+        explanation:
+          'Раздел тестирования требований содержит заглушку вместо реальных тест-кейсов.',
+        recommendation: 'Заполнить раздел тест-кейсами для Ф-1 – Ф-4.',
+      },
+    ]);
+
+    assert.equal(deduped.length, 2);
+    assert.equal(deduped[0].findingId, 'FND-001');
+    assert.equal(deduped[0].severity, 'Critical');
+    assert.deepEqual(deduped[0].requirementIds, ['REQ-001']);
+    assert.equal(deduped[0].sourceLocation, 'Строки 104, 108');
+    assert.equal(deduped[1].findingId, 'FND-002');
+    assert.equal(deduped[1].sourceLocation, 'Строка 57');
   });
 });

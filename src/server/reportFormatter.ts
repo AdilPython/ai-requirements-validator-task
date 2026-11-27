@@ -212,13 +212,13 @@ export function formatMarkdownReport(
     lines.push('Критичных дефектов не выявлено.');
     lines.push('');
   } else {
-    for (const cf of summary.criticalFindings) {
+    summary.criticalFindings.forEach((cf, idx) => {
       lines.push(
-        `1. **${cf.findingId}** (${cf.requirementIds.join(', ') || 'ОБЩЕЕ'} · ${cf.sourceLocation}): ${cf.explanation}`
+        `${idx + 1}. **${cf.findingId}** (${cf.requirementIds.join(', ') || 'ОБЩЕЕ'} · ${cf.sourceLocation}): ${cf.explanation}`
       );
       lines.push(`   - *Цитата:* «${cf.evidence}»`);
       lines.push(`   - *Исправление:* ${cf.recommendation}`);
-    }
+    });
     lines.push('');
   }
 
@@ -237,7 +237,8 @@ export function formatMarkdownReport(
   lines.push('### Приоритезированные рекомендации');
   lines.push('');
   verdict.prioritizedRecommendations.forEach((rec, idx) => {
-    lines.push(`${idx + 1}. ${rec}`);
+    const cleaned = rec.replace(/^\s*\d+[.)]\s+/, '').trim();
+    lines.push(`${idx + 1}. ${cleaned}`);
   });
   lines.push('');
 

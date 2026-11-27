@@ -13,7 +13,10 @@ import {
   WholeDocumentResponseSchema,
 } from '../src/server/schemas.ts';
 import { formatMarkdownReport } from '../src/server/reportFormatter.ts';
-import { generatePdfReportBuffer } from '../src/server/pdfFormatter.ts';
+import {
+  generatePdfReportBuffer,
+  resolveFontPaths,
+} from '../src/server/pdfFormatter.ts';
 import { parseCliArgs } from '../scripts/analyze.ts';
 import {
   validateRequirementsDocument,
@@ -30,7 +33,8 @@ async function createSamplePdfBuffer(pages: string[]): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    doc.font('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf').fontSize(12);
+    const fonts = resolveFontPaths();
+    doc.font(fonts.regular).fontSize(12);
     pages.forEach((text, idx) => {
       if (idx > 0) doc.addPage();
       doc.text(text);
@@ -316,6 +320,11 @@ describe('report formatting (Markdown & PDF)', () => {
     assert.ok(md.includes('## 5. Находки с доказательствами'));
     assert.ok(md.includes('## 7. Критичные дефекты (Critical)'));
     assert.ok(md.includes('FND-001'));
+
+    const fonts = resolveFontPaths();
+    assert.ok(fonts.regular.includes('dejavu-fonts-ttf'));
+    assert.ok(fonts.bold.includes('dejavu-fonts-ttf'));
+    assert.ok(fonts.mono.includes('dejavu-fonts-ttf'));
 
     const fullReport: ValidationReport = { ...base, markdownReport: md };
     const pdfBuffer = await generatePdfReportBuffer(fullReport);

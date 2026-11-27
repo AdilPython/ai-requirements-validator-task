@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
 import PDFDocument from 'pdfkit';
 import type {
   ValidationReport,
@@ -8,12 +10,56 @@ import type {
   SeverityLevel,
 } from '../types/validation.ts';
 
-function resolveFontPaths(): {
+interface FontSet {
   regular: string;
   bold: string;
   mono: string;
-} {
-  const candidates = [
+}
+
+function getPackageFontDir(): string | null {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkgPath = require.resolve('dejavu-fonts-ttf/package.json');
+    return path.join(path.dirname(pkgPath), 'ttf');
+  } catch {
+    const cwdCandidate = path.resolve(
+      process.cwd(),
+      'node_modules/dejavu-fonts-ttf/ttf'
+    );
+    return fs.existsSync(cwdCandidate) ? cwdCandidate : null;
+  }
+}
+
+export function resolveFontPaths(): FontSet {
+  const pkgFontDir = getPackageFontDir();
+  const candidates: FontSet[] = [];
+
+  if (pkgFontDir) {
+    candidates.push({
+      regular: path.join(pkgFontDir, 'DejaVuSans.ttf'),
+      bold: path.join(pkgFontDir, 'DejaVuSans-Bold.ttf'),
+      mono: path.join(pkgFontDir, 'DejaVuSansMono.ttf'),
+    });
+  }
+
+  candidates.push(
+    // macOS system Cyrillic TTF fonts
+    {
+      regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
+      bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+      mono: '/System/Library/Fonts/Supplemental/Courier New.ttf',
+    },
+    {
+      regular: '/System/Library/Fonts/Supplemental/Arial.ttf',
+      bold: '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+      mono: '/System/Library/Fonts/Supplemental/Arial.ttf',
+    },
+    {
+      regular: '/Library/Fonts/Arial Unicode.ttf',
+      bold: '/Library/Fonts/Arial Unicode.ttf',
+      mono: '/Library/Fonts/Arial Unicode.ttf',
+    },
+    // Linux system Cyrillic TTF fonts
     {
       regular: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
       bold: '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
@@ -24,7 +70,13 @@ function resolveFontPaths(): {
       bold: '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
       mono: '/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf',
     },
-  ];
+    // Windows system Cyrillic TTF fonts
+    {
+      regular: 'C:\\Windows\\Fonts\\arial.ttf',
+      bold: 'C:\\Windows\\Fonts\\arialbd.ttf',
+      mono: 'C:\\Windows\\Fonts\\cour.ttf',
+    }
+  );
 
   for (const c of candidates) {
     if (
@@ -37,7 +89,7 @@ function resolveFontPaths(): {
   }
 
   throw new Error(
-    'Не найдены системные TrueType-шрифты с поддержкой кириллицы (DejaVuSans / LiberationSans) для генерации PDF.'
+    'Не найдены TrueType-шрифты с поддержкой кириллицы (dejavu-fonts-ttf / системные Arial, DejaVuSans, LiberationSans) для генерации PDF.'
   );
 }
 

@@ -41,15 +41,18 @@ export function resolveModelName(overrideModel?: string): string {
     const normalized = candidate.replace(/^models\//, '');
     if (DEPRECATED_MODELS.has(normalized)) {
       throw new Error(
-        `Модель "${normalized}" устарела и не поддерживается. Используйте актуальную модель, например gemini-4-hydrogen, gemini-2.5-flash или gemini-2.5-pro.`
+        `Модель "${normalized}" устарела и не поддерживается. Используйте актуальную модель, например gemini-3.5-flash-lite, gemini-2.5-flash или gemini-2.5-pro.`
       );
     }
     return normalized;
   }
-  return 'gemini-4-hydrogen';
+  return 'gemini-3.5-flash-lite';
 }
 
 export function supportsThinkingLevel(model: string): boolean {
+  if (model.includes('flash-lite')) {
+    return false;
+  }
   return /^gemini-(3|4)/.test(model);
 }
 

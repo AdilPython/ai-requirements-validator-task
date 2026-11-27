@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import PDFDocument from 'pdfkit';
 import {
@@ -17,7 +18,7 @@ import {
   generatePdfReportBuffer,
   resolveFontPaths,
 } from '../src/server/pdfFormatter.ts';
-import { parseCliArgs } from '../scripts/analyze.ts';
+import { parseCliArgs, writeReportOutputs } from '../scripts/analyze.ts';
 import {
   validateRequirementsDocument,
   resolveModelName,
@@ -216,7 +217,7 @@ describe('report formatting (Markdown & PDF)', () => {
         documentName: 'docs/requirements.md',
         documentTitle: 'Уведомление о расходах по карте',
         runDate: '25.11.2026, 20:15:00',
-        model: 'gemini-4-hydrogen',
+        model: 'gemini-3.5-flash-lite',
         agentVersion: 'v1.0.0',
         sourceFormat: 'markdown',
         totalUnitsLabel: '199 строк, 20 разделов',
@@ -330,6 +331,18 @@ describe('report formatting (Markdown & PDF)', () => {
     const pdfBuffer = await generatePdfReportBuffer(fullReport);
     assert.ok(pdfBuffer.subarray(0, 5).toString('ascii') === '%PDF-');
     assert.ok(pdfBuffer.length > 5000);
+
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'req-val-'));
+    try {
+      const pdfTarget = path.join(tmpDir, 'report.pdf');
+      const saved = await writeReportOutputs(fullReport, pdfTarget);
+      assert.equal(saved.length, 3);
+      await fs.access(path.join(tmpDir, 'report.pdf'));
+      await fs.access(path.join(tmpDir, 'report.md'));
+      await fs.access(path.join(tmpDir, 'report.json'));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -366,13 +379,24 @@ describe('CLI and error handling', () => {
   });
 
   it('resolves valid Gemini models and gates thinkingLevel properly', () => {
+    const prevModel = process.env.GEMINI_MODEL;
+    delete process.env.GEMINI_MODEL;
+    try {
+      assert.equal(resolveModelName(), 'gemini-3.5-flash-lite');
+    } finally {
+      if (prevModel !== undefined) {
+        process.env.GEMINI_MODEL = prevModel;
+      }
+    }
+
+    assert.equal(resolveModelName('gemini-3.5-flash-lite'), 'gemini-3.5-flash-lite');
     assert.equal(resolveModelName('gemini-2.5-flash'), 'gemini-2.5-flash');
     assert.equal(resolveModelName('models/gemini-2.5-pro'), 'gemini-2.5-pro');
     assert.equal(resolveModelName('gemini-4-hydrogen'), 'gemini-4-hydrogen');
     assert.throws(() => resolveModelName('gemini-1.5-flash'), /устарела/);
 
+    assert.equal(supportsThinkingLevel('gemini-3.5-flash-lite'), false);
     assert.equal(supportsThinkingLevel('gemini-4-hydrogen'), true);
-    assert.equal(supportsThinkingLevel('gemini-3.1-flash-lite'), true);
     assert.equal(supportsThinkingLevel('gemini-2.5-flash'), false);
     assert.equal(supportsThinkingLevel('gemini-2.5-pro'), false);
   });

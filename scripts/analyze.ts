@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { ValidationReport } from '../src/types/validation.ts';
 import { validateRequirementsDocument } from '../src/server/validator.ts';
 import { generatePdfReportBuffer } from '../src/server/pdfFormatter.ts';
 
@@ -66,10 +67,45 @@ function printUsage(): void {
 Опции:
   -i, --input <path>       Путь к входному документу (.md, .txt, .pdf)
   -o, --output <path>      Путь к файлу отчёта (.pdf, .md, .json)
-  -m, --model <name>       Модель Gemini (по умолчанию из GEMINI_MODEL или gemini-4-hydrogen)
+  -m, --model <name>       Модель Gemini (по умолчанию из GEMINI_MODEL или gemini-3.5-flash-lite)
       --chunk-size <n>     Размер чанка в символах (по умолчанию 14000)
   -h, --help               Показать справку`
   );
+}
+
+export async function writeReportOutputs(
+  report: ValidationReport,
+  outputPath: string
+): Promise<string[]> {
+  const resolvedOutput = path.resolve(process.cwd(), outputPath);
+  await fs.mkdir(path.dirname(resolvedOutput), { recursive: true });
+  const lowerOutput = resolvedOutput.toLowerCase();
+  const savedPaths: string[] = [];
+
+  if (lowerOutput.endsWith('.pdf')) {
+    const pdfBuffer = await generatePdfReportBuffer(report);
+    await fs.writeFile(resolvedOutput, pdfBuffer);
+    savedPaths.push(resolvedOutput);
+
+    const baseWithoutExt = resolvedOutput.slice(0, -4);
+    const mdPath = `${baseWithoutExt}.md`;
+    const jsonPath = `${baseWithoutExt}.json`;
+    await fs.writeFile(mdPath, report.markdownReport, 'utf-8');
+    await fs.writeFile(jsonPath, JSON.stringify(report, null, 2), 'utf-8');
+    savedPaths.push(mdPath, jsonPath);
+  } else if (lowerOutput.endsWith('.json')) {
+    await fs.writeFile(
+      resolvedOutput,
+      JSON.stringify(report, null, 2),
+      'utf-8'
+    );
+    savedPaths.push(resolvedOutput);
+  } else {
+    await fs.writeFile(resolvedOutput, report.markdownReport, 'utf-8');
+    savedPaths.push(resolvedOutput);
+  }
+
+  return savedPaths;
 }
 
 async function runCli(): Promise<void> {
@@ -89,7 +125,6 @@ async function runCli(): Promise<void> {
   }
 
   const resolvedInput = path.resolve(process.cwd(), options.inputPath);
-  const resolvedOutput = path.resolve(process.cwd(), options.outputPath);
 
   try {
     await fs.access(resolvedInput);
@@ -119,23 +154,11 @@ async function runCli(): Promise<void> {
     maxCharsPerChunk: options.chunkSize,
   });
 
-  await fs.mkdir(path.dirname(resolvedOutput), { recursive: true });
-  const lowerOutput = resolvedOutput.toLowerCase();
+  const savedPaths = await writeReportOutputs(report, options.outputPath);
 
-  if (lowerOutput.endsWith('.pdf')) {
-    const pdfBuffer = await generatePdfReportBuffer(report);
-    await fs.writeFile(resolvedOutput, pdfBuffer);
-  } else if (lowerOutput.endsWith('.json')) {
-    await fs.writeFile(
-      resolvedOutput,
-      JSON.stringify(report, null, 2),
-      'utf-8'
-    );
-  } else {
-    await fs.writeFile(resolvedOutput, report.markdownReport, 'utf-8');
+  for (const saved of savedPaths) {
+    console.log(`Отчёт сохранён: ${path.relative(process.cwd(), saved)}`);
   }
-
-  console.log(`Отчёт сохранён: ${options.outputPath}`);
   console.log(
     `Требований: ${report.summary.totalRequirements} | Находок: ${report.summary.totalFindings} (Critical: ${report.summary.severityCounts.Critical}, High: ${report.summary.severityCounts.High}, Medium: ${report.summary.severityCounts.Medium}, Low: ${report.summary.severityCounts.Low})`
   );

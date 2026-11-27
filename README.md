@@ -34,7 +34,7 @@
 3. Укажите ключ в `.env` (файл `.env` добавлен в `.gitignore` и не попадает в репозиторий):
    ```env
    GEMINI_API_KEY=ваш_ключ_из_google_ai_studio
-   GEMINI_MODEL=gemini-4-hydrogen
+   GEMINI_MODEL=gemini-3.5-flash-lite
    ```
 
 ---
@@ -53,14 +53,17 @@ npm install
 npm run analyze -- --input docs/requirements.md --output output/report.pdf
 ```
 
-Поддерживаются форматы отчёта `.pdf`, `.md` и `.json` (определяются по расширению файла `--output`):
+При указании `--output output/report.pdf` агент формирует PDF-отчёт и автоматически сохраняет рядом текстовую и структурированную версии (`output/report.md` и `output/report.json`). Также можно указать `.md` или `.json` напрямую:
 
 ```bash
-# Сформировать PDF-отчёт
+# Сформировать PDF-отчёт (а также .md и .json рядом)
 npm run analyze -- --input docs/requirements.md --output output/report.pdf
 
-# Сформировать Markdown-отчёт
+# Сформировать только Markdown-отчёт
 npm run analyze -- --input docs/requirements.md --output output/report.md
+
+# Сформировать только JSON-отчёт
+npm run analyze -- --input docs/requirements.md --output output/report.json
 
 # Проверить PDF-документ с требованиями
 npm run analyze -- --input path/to/spec.pdf --output output/report.pdf
